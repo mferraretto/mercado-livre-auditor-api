@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "API para scraping de anúncios do Mercado Livre com Playwright",
   "main": "ml-scraper-api.js",
-  "scripts": {
-    "start": "node ml-scraper-api.js"
+ "scripts": {
+  "postinstall": "puppeteer install",
+  "start": "node ml-scraper-api.js"
   },
   "keywords": ["mercado livre", "scraping", "api", "playwright"],
   "author": "Seu Nome",
