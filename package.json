@@ -1,0 +1,13 @@
+{
+  "name": "mercado-livre-auditor-api",
+  "version": "1.0.0",
+  "main": "ml-scraper-api.js",
+  "scripts": {
+    "start": "node ml-scraper-api.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.39.0",
+    "cors": "^2.8.5"
+  }
+}
