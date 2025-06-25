@@ -1,6 +1,6 @@
 // ml-scraper-api.js (versão ajustada para capturar corretamente dados de descriptionHTML, atributos e imagens)
 
-const puppeteer = require("puppeteer");
+const { chromium } = require("playwright");
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -12,7 +12,7 @@ app.get("/scrape", async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "URL não fornecida." });
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
 
   try {
