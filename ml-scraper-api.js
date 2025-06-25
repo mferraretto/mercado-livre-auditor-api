@@ -1,16 +1,16 @@
-// ml-scraper-api.js (versão ajustada para capturar corretamente dados de descriptionHTML, atributos e imagens)
-
-const { chromium } = require("playwright");
 const express = require("express");
 const cors = require("cors");
-const app = express();
+const { chromium } = require("playwright");
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/scrape", async (req, res) => {
+app.get("/auditar", async (req, res) => {
   const url = req.query.url;
-  if (!url) return res.status(400).json({ error: "URL não fornecida." });
+  if (!url || !url.includes("mercadolivre.com.br")) {
+    return res.status(400).json({ error: "URL inválida ou ausente." });
+  }
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -18,48 +18,68 @@ app.get("/scrape", async (req, res) => {
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    const result = await page.evaluate(() => {
-      const title = document.querySelector("h1.ui-pdp-title")?.innerText || "";
-      const price = document.querySelector(".ui-pdp-price__second-line")?.innerText || "";
+    const data = await page.evaluate(() => {
+      const getText = (selector) => {
+        const el = document.querySelector(selector);
+        return el ? el.textContent.trim() : null;
+      };
 
-      const sold = document.querySelector(".ui-pdp-subtitle")?.innerText || "";
-      const reputation = document.querySelector(".ui-pdp-seller__header__title")?.innerText || "";
+      const getNumberFromText = (text) => {
+        if (!text) return null;
+        const match = text.match(/\d+(\.\d+)?/g);
+        return match ? parseFloat(match.join("").replace(".", "").replace(",", ".")) : null;
+      };
 
-      const descriptionHTML = document.querySelector("#description")?.innerHTML || "";
+      const title = getText("h1.ui-pdp-title");
+      const priceText = getText("span.ui-pdp-price__second-line span.price-tag-fraction");
+      const price = priceText ? parseFloat(priceText.replace(".", "").replace(",", ".")) : null;
 
-      const images = Array.from(document.querySelectorAll(".ui-pdp-gallery__figure img"))
-        .map(img => img.getAttribute("src"))
-        .filter(src => src);
+      const soldText = getText(".ui-pdp-subtitle span");
+      const soldMatch = soldText ? soldText.match(/\d+/) : null;
+      const soldQuantity = soldMatch ? parseInt(soldMatch[0]) : 0;
 
-      const attributes = Array.from(document.querySelectorAll(".ui-vpp-striped-specs__table tr"))
+      const reputation = getText("p.ui-seller-info__status-info") ||
+                         getText("p.ui-pdp-seller__header__subtitle");
+
+      const descriptionHTML = document.querySelector("#description")?.innerHTML || null;
+
+      const descriptionText = document.querySelector("#description")?.innerText || "";
+      const medidas = [];
+      const linhas = descriptionText.split("\n").map(l => l.trim());
+      for (const linha of linhas) {
+        const match = linha.match(/(Cilindro\s*[PGM]):?\s*(\d+)\s*cm.*?(\d+)\s*cm/i);
+        if (match) {
+          medidas.push({ tipo: match[1], altura: match[2], diametro: match[3] });
+        }
+      }
+
+      const atributos = Array.from(document.querySelectorAll("tr.andes-table__row"))
         .map(row => {
-          const label = row.querySelector("th")?.innerText.trim();
+          const key = row.querySelector("th")?.innerText.trim();
           const value = row.querySelector("td")?.innerText.trim();
-          return label && value ? { [label]: value } : null;
-        })
-        .filter(Boolean);
+          return key && value ? { [key]: value } : null;
+        }).filter(Boolean);
 
       return {
-        title,
-        price,
-        sold,
-        reputation,
-        descriptionHTML,
-        attributes,
-        images,
-        url: window.location.href
+        titulo: title,
+        preco: price,
+        vendidos: soldQuantity,
+        reputacao: reputation,
+        medidas,
+        atributos_tecnicos: atributos,
+        descriptionHTML
       };
     });
 
     await browser.close();
-    res.json(result);
-  } catch (err) {
+    return res.json(data);
+  } catch (error) {
     await browser.close();
-    res.status(500).json({ error: "Erro ao capturar dados.", details: err.message });
+    return res.status(500).json({ error: "Erro ao auditar anúncio.", detalhe: error.message });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`🟢 Auditor Mercado Livre rodando na porta ${PORT}`);
 });
