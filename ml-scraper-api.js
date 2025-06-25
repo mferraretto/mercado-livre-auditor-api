@@ -1,58 +1,71 @@
-// ml-scraper-api.js
-const express = require('express');
-const cors = require('cors');
-const { chromium } = require('playwright');
+// ml-scraper-api.js - Versão aprimorada
+const express = require("express");
+const cors = require("cors");
+const { chromium } = require("playwright");
 
 const app = express();
-app.use(cors());
 const PORT = process.env.PORT || 10000;
 
-app.get('/dados', async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send({ erro: 'URL não informada' });
+app.use(cors());
 
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+app.get("/dados", async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ erro: "URL não informada." });
 
-  const data = await page.evaluate(() => {
-    const getText = (selector) => document.querySelector(selector)?.innerText?.trim() || '';
-    const getHTML = (selector) => document.querySelector(selector)?.innerHTML?.trim() || '';
-    const getAllSrc = (selector) => Array.from(document.querySelectorAll(selector)).map(img => img.src);
+  try {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    // Atributos Técnicos (lateral)
-    const atributos = {};
-    document.querySelectorAll('[data-testid="attributes"] tr').forEach(row => {
-      const key = row.querySelector('th')?.innerText?.trim();
-      const value = row.querySelector('td')?.innerText?.trim();
-      if (key && value) atributos[key] = value;
+    const data = await page.evaluate(() => {
+      const getText = (selector) => document.querySelector(selector)?.innerText || "";
+      const getHTML = (selector) => document.querySelector(selector)?.innerHTML || "";
+
+      const titleRaw = getText("h1.ui-pdp-title").trim();
+      const title = titleRaw
+        .replace(/frete gr[aá]tis/i, "")
+        .replace(/[\-\|\n].*$/, "")
+        .replace(/\s+/g, " ")
+        .replace(/\//g, " / ");
+
+      const price = getText(".ui-pdp-price__second-line").match(/R\$\s?[\d,.]+/)?.[0] || "";
+      const descriptionHTML = getHTML(".ui-pdp-description");
+      const descriptionText = getText(".ui-pdp-description");
+      const attributes = [...document.querySelectorAll(".andes-table__row")].map(row => {
+        const key = row.querySelector("th")?.innerText.trim();
+        const value = row.querySelector("td")?.innerText.trim();
+        return key && value ? `${key}: ${value}` : null;
+      }).filter(Boolean);
+
+      const shippingInfo = document.body.innerText.includes("Frete grátis") ? "Frete grátis" : "Não identificado";
+
+      const reputation = document.body.innerText.match(/MercadoLíder.*(Platinum|Gold|Verde)/i)?.[0] || "Não identificada";
+
+      const medidas = Array.from(descriptionText.matchAll(/CILINDRO\s+[PGM]\s*[-\u2013]?\s*Altura:\s*(\d+)[^\d]+Di[^"]{0,20}?(\d+)/gi)).map(match => {
+        return `Altura: ${match[1]}cm, Diâmetro: ${match[2]}cm`;
+      });
+
+      const hasBullets = descriptionHTML.includes("<li>") || /[\u2022\*-]\s/.test(descriptionText);
+
+      return {
+        titulo: title,
+        preco: price,
+        frete: shippingInfo,
+        reputacao: reputation,
+        atributos: attributes,
+        descricaoCompleta: descriptionText,
+        medidas,
+        descricaoHTML: descriptionHTML,
+        possuiBulletPoints: hasBullets ? "Sim" : "Não",
+      };
     });
 
-    // Reputação do vendedor
-    const reputacao = document.querySelector('[data-testid="reputation-pill"]')?.innerText?.trim() || 'Não identificado';
-
-    // Frete
-    const frete = document.querySelector('[data-testid="shipping-option"]')?.innerText || '';
-    const temFreteGratis = frete.toLowerCase().includes('grátis');
-
-    return {
-      titulo: getText('h1'),
-      preco: getText('[data-testid="price"] span'),
-      description: getText('#description'),
-      descriptionHTML: getHTML('#description'),
-      imagens: getAllSrc('img.ui-pdp-image'),
-      atributos,
-      frete: temFreteGratis ? 'Frete Grátis' : frete || 'Não identificado',
-      reputacao,
-      url: window.location.href
-    };
-  });
-
-  await browser.close();
-  res.json(data);
+    await browser.close();
+    res.json(data);
+  } catch (err) {
+    console.error("Erro:", err);
+    res.status(500).json({ erro: "Falha ao acessar o anúncio." });
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
-
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
