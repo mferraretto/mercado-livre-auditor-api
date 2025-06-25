@@ -1,13 +1,17 @@
 {
   "name": "mercado-livre-auditor-api",
   "version": "1.0.0",
+  "description": "API para scraping de anúncios do Mercado Livre com Playwright",
   "main": "ml-scraper-api.js",
   "scripts": {
     "start": "node ml-scraper-api.js"
   },
+  "keywords": ["mercado livre", "scraping", "api", "playwright"],
+  "author": "Seu Nome",
+  "license": "MIT",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "playwright": "^1.39.0",
-    "cors": "^2.8.5"
+    "playwright": "^1.43.1"
   }
 }
